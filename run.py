@@ -75,10 +75,8 @@ if config["spider_settings"]["enable"]:
     
     # 保存结果
     output_data = {
-        "friends": [
-            [friend['title'], friend['url'], friend['avatar']] for friend in friends
-        ],
-        "articles": result['article_data']
+        "statistical_data": result['statistical_data'],
+        "article_data": result['article_data']
     }
     with open("all.json", "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
