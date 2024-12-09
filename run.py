@@ -1,17 +1,17 @@
-# 引入 check_feed 和 parse_feed 函数
-from friend_circle_lite.get_info import fetch_and_process_data, sort_articles_by_time, marge_data_from_json_url, marge_errors_from_json_url, deal_with_large_data
-from friend_circle_lite.get_conf import load_config
-from rss_subscribe.push_article_update import get_latest_articles_from_link, extract_emails_from_issues
-from push_rss_update.send_email import send_emails
-
 import logging
 import json
 import sys
 import os
+import requests
+import datetime
+
+from friend_circle_lite.get_info import fetch_and_process_data, sort_articles_by_time, marge_data_from_json_url, marge_errors_from_json_url, deal_with_large_data, check_feed, parse_feed
+from friend_circle_lite.get_conf import load_config
+from rss_subscribe.push_article_update import get_latest_articles_from_link, extract_emails_from_issues
+from push_rss_update.send_email import send_emails
 
 # 日志记录
 logging.basicConfig(level=logging.INFO, format='😋 %(levelname)s: %(message)s')
-
 
 # 爬虫部分内容
 config = load_config("./conf.yaml")
@@ -21,17 +21,66 @@ if config["spider_settings"]["enable"]:
     article_count = config['spider_settings']['article_count']
     specific_RSS = config['specific_RSS']
     logging.info("正在从 {json_url} 中获取，每个博客获取 {article_count} 篇文章".format(json_url=json_url, article_count=article_count))
-    result, lost_friends = fetch_and_process_data(json_url=json_url, specific_RSS=specific_RSS, count=article_count)
+    
+    # 获取并��理数据
+    response = requests.get(json_url)
+    friends_data = response.json()
+    
+    # 处理新的 JSON 格式
+    friends = friends_data['content']
+    result = {
+        'statistical_data': {
+            'friends_num': len(friends),
+            'active_num': 0,
+            'error_num': 0,
+            'article_num': 0,
+            'last_updated_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        },
+        'article_data': []
+    }
+    lost_friends = []
+
+    for friend in friends:
+        name = friend['title']
+        blog_url = friend['url']
+        avatar = friend['avatar']
+        feed_type, feed_url = check_feed(blog_url, requests.Session())
+        if feed_type != 'none':
+            feed_info = parse_feed(feed_url, requests.Session(), article_count, blog_url)
+            articles = [
+                {
+                    'title': article['title'],
+                    'created': article['published'],
+                    'link': article['link'],
+                    'author': name,
+                    'avatar': avatar
+                }
+                for article in feed_info['articles']
+            ]
+            result['article_data'].extend(articles)
+            result['statistical_data']['active_num'] += 1
+            result['statistical_data']['article_num'] += len(articles)
+        else:
+            lost_friends.append(friend)
+            result['statistical_data']['error_num'] += 1
+
     if config["spider_settings"]["merge_result"]["enable"]:
         marge_json_url = config['spider_settings']["merge_result"]['merge_json_url']
         logging.info("合并数据功能开启，从 {marge_json_url} 中获取境外数据并合并".format(marge_json_url=marge_json_url + "/all.json"))
         result = marge_data_from_json_url(result, marge_json_url + "/all.json")
         lost_friends = marge_errors_from_json_url(lost_friends, marge_json_url + "/errors.json")
+    
     logging.info("数据获取完毕，目前共有 {count} 位好友的动态，正在处理数据".format(count=len(result.get("article_data", []))))
     result = deal_with_large_data(result)
-
+    
+    # 保存结果
+    output_data = {
+        "friends": [
+            [friend['title'], friend['url'], friend['avatar']] for friend in friends
+        ]
+    }
     with open("all.json", "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
     with open("errors.json", "w", encoding="utf-8") as f:
         json.dump(lost_friends, f, ensure_ascii=False, indent=2)
 
