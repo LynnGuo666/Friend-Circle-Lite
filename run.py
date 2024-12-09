@@ -22,7 +22,7 @@ if config["spider_settings"]["enable"]:
     specific_RSS = config['specific_RSS']
     logging.info("正在从 {json_url} 中获取，每个博客获取 {article_count} 篇文章".format(json_url=json_url, article_count=article_count))
     
-    # 获取并��理数据
+    # 获取并处理数据
     response = requests.get(json_url)
     friends_data = response.json()
     
@@ -77,7 +77,8 @@ if config["spider_settings"]["enable"]:
     output_data = {
         "friends": [
             [friend['title'], friend['url'], friend['avatar']] for friend in friends
-        ]
+        ],
+        "articles": result['article_data']
     }
     with open("all.json", "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
