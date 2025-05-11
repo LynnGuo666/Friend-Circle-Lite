@@ -218,7 +218,7 @@ def process_friend(friend, session, count, specific_RSS=[]):
     处理单个朋友的博客信息。
 
     参数：
-    friend (list): 包含朋友信息的列表 [name, blog_url, avatar]。
+    friend (dict): 包含朋友信息的字典 {"title": 标题, "url": 博客地址, "avatar": 图标}。
     session (requests.Session): 用于请求的会话对象。
     count (int): 获取每个博客的最大文章数。
     specific_RSS (list): 包含特定 RSS 源的字典列表 [{name, url}]
@@ -226,8 +226,10 @@ def process_friend(friend, session, count, specific_RSS=[]):
     返回：
     dict: 包含朋友博客信息的字典。
     """
-    name, blog_url, avatar = friend
-    
+    name = friend.get("title", "")
+    blog_url = friend.get("url", "")
+    avatar = friend.get("avatar", "")
+
     # 如果 specific_RSS 中有对应的 name，则直接返回 feed_url
     if specific_RSS is None:
         specific_RSS = []
@@ -252,10 +254,10 @@ def process_friend(friend, session, count, specific_RSS=[]):
             }
             for article in feed_info['articles']
         ]
-        
+
         for article in articles:
             logging.info(f"{name} 发布了新文章：{article['title']}，时间：{article['created']}，链接：{article['link']}")
-        
+
         return {
             'name': name,
             'status': 'active',
