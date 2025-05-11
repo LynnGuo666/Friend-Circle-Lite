@@ -285,7 +285,7 @@ def fetch_and_process_data(json_url, specific_RSS=[], count=5):
     
     try:
         response = session.get(json_url, headers=HEADERS_JSON, timeout=timeout)
-        friends_data = response.json()
+        friends_data = {'friends': response.json()}
     except Exception as e:
         logging.error(f"无法获取链接：{json_url} ：{e}", exc_info=True)
         return None
