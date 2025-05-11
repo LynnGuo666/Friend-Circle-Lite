@@ -218,7 +218,7 @@ def process_friend(friend, session, count, specific_RSS=[]):
     处理单个朋友的博客信息。
 
     参数：
-    friend (dict): 包含朋友信息的字典 {"title": 标题, "url": 博客地址, "avatar": 图标}。
+    friend (dict或list): 包含朋友信息的字典或列表。
     session (requests.Session): 用于请求的会话对象。
     count (int): 获取每个博客的最大文章数。
     specific_RSS (list): 包含特定 RSS 源的字典列表 [{name, url}]
@@ -226,9 +226,20 @@ def process_friend(friend, session, count, specific_RSS=[]):
     返回：
     dict: 包含朋友博客信息的字典。
     """
-    name = friend.get("title", "")
-    blog_url = friend.get("url", "")
-    avatar = friend.get("avatar", "")
+    # 判断传入的 friend 类型，处理不同的数据格式
+    if isinstance(friend, dict):
+        name = friend.get("title", "")
+        blog_url = friend.get("url", "")
+        avatar = friend.get("avatar", "")
+    elif isinstance(friend, list) and len(friend) >= 3:
+        name, blog_url, avatar = friend
+    else:
+        logging.error(f"无法识别的朋友数据格式: {friend}")
+        return {
+            'name': str(friend),
+            'status': 'error',
+            'articles': []
+        }
 
     # 如果 specific_RSS 中有对应的 name，则直接返回 feed_url
     if specific_RSS is None:
@@ -287,7 +298,22 @@ def fetch_and_process_data(json_url, specific_RSS=[], count=5):
     
     try:
         response = session.get(json_url, headers=HEADERS_JSON, timeout=timeout)
-        friends_data = {'friends': response.json()}
+        json_data = response.json()
+        
+        # 检查响应的 JSON 数据格式
+        if isinstance(json_data, list):
+            # 如果是列表，直接作为 friends
+            friends_data = {'friends': json_data}
+        elif isinstance(json_data, dict) and 'content' in json_data:
+            # 如果是你提供的格式，content 字段是朋友列表
+            friends_data = {'friends': json_data['content']}
+        elif isinstance(json_data, dict) and 'friends' in json_data:
+            # 已经是正确格式
+            friends_data = json_data
+        else:
+            # 无法识别的格式
+            logging.error(f"无法识别的 JSON 数据格式: {type(json_data)}")
+            return None
     except Exception as e:
         logging.error(f"无法获取链接：{json_url} ：{e}", exc_info=True)
         return None
@@ -315,11 +341,25 @@ def fetch_and_process_data(json_url, specific_RSS=[], count=5):
                     total_articles += len(result['articles'])
                 else:
                     error_friends += 1
-                    error_friends_info.append(friend)
+                    # 确保错误信息以一致的格式添加
+                    if isinstance(friend, dict):
+                        error_info = [friend.get("title", ""), friend.get("url", ""), friend.get("avatar", "")]
+                    elif isinstance(friend, list) and len(friend) >= 3:
+                        error_info = friend
+                    else:
+                        error_info = [str(friend), "", ""]
+                    error_friends_info.append(error_info)
             except Exception as e:
                 logging.error(f"处理 {friend} 时发生错误: {e}", exc_info=True)
                 error_friends += 1
-                error_friends_info.append(friend)
+                # 确保错误信息以一致的格式添加
+                if isinstance(friend, dict):
+                    error_info = [friend.get("title", ""), friend.get("url", ""), friend.get("avatar", "")]
+                elif isinstance(friend, list) and len(friend) >= 3:
+                    error_info = friend
+                else:
+                    error_info = [str(friend), "", ""]
+                error_friends_info.append(error_info)
 
     result = {
         'statistical_data': {
